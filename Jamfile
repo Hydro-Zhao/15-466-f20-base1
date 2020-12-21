@@ -79,10 +79,20 @@ GAME_NAMES =
 	Mode
 	GL
 	Load
+	data_path
+	;
+
+CONVERTER_NAMES = 
+	convert_assets
+	load_save_png
 	;
 
 LOCATE_TARGET = objs ; #put objects in 'objs' directory
 Objects $(GAME_NAMES:S=.cpp) ;
+Objects $(CONVERTER_NAMES:S=.cpp) ;
 
 LOCATE_TARGET = dist ; #put main in 'dist' directory
 MainFromObjects game : $(GAME_NAMES:S=$(SUFOBJ)) ;
+
+LOCATE_TARGET = asset/sprite ; #put objects in 'objs' directory
+MainFromObjects convert_assets : $(CONVERTER_NAMES:S=$(SUFOBJ)) ;

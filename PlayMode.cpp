@@ -8,6 +8,19 @@
 
 #include <random>
 
+#include <iostream>
+#include <vector>
+#include <map>
+#include <string>
+#include <fstream>
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
+#include "load_save_png.hpp"
+#include "convert_assets.hpp"
+#include "data_path.hpp"
+#include "read_write_chunk.hpp"
+
 PlayMode::PlayMode() {
 	//TODO:
 	// you *must* use an asset pipeline of some sort to generate tiles.
@@ -16,90 +29,38 @@ PlayMode::PlayMode() {
 	//  make yourself a script that spits out the code that you paste in here
 	//   and check that script into your repository.
 
-	//Also, *don't* use these tiles in your game:
+	// https://github.com/jyanln/15-466-f20-game1/blob/07d108eef55419a0ab6545aafc0a3ea924d98eef/PlayMode.cpp
+	std::ifstream istrm(data_path("asset/sprite/sprites.list"));
+	int tile_index = 0;
+	uint32_t i = 0;
+	for (std::string line; std::getline(istrm, line); i++) {
+   		std::vector<uint8_t> raw_data;
+   		std::string asset_loc = data_path(std::string("asset/sprite/") + line + ASSET_EXTENSION);
+   		std::ifstream asset_file(asset_loc, std::ios::binary);
+   		read_chunk(asset_file, MAGIC, &raw_data);
+   		asset_file.close();
 
-	{ //use tiles 0-16 as some weird dot pattern thing:
-		std::array< uint8_t, 8*8 > distance;
-		for (uint32_t y = 0; y < 8; ++y) {
-			for (uint32_t x = 0; x < 8; ++x) {
-				float d = glm::length(glm::vec2((x + 0.5f) - 4.0f, (y + 0.5f) - 4.0f));
-				d /= glm::length(glm::vec2(4.0f, 4.0f));
-				distance[x+8*y] = std::max(0,std::min(255,int32_t( 255.0f * d )));
-			}
-		}
-		for (uint32_t index = 0; index < 16; ++index) {
-			PPU466::Tile tile;
-			uint8_t t = (255 * index) / 16;
-			for (uint32_t y = 0; y < 8; ++y) {
-				uint8_t bit0 = 0;
-				uint8_t bit1 = 0;
-				for (uint32_t x = 0; x < 8; ++x) {
-					uint8_t d = distance[x+8*y];
-					if (d > t) {
-						bit0 |= (1 << x);
-					} else {
-						bit1 |= (1 << x);
-					}
-				}
-				tile.bit0[y] = bit0;
-				tile.bit1[y] = bit1;
-			}
-			ppu.tile_table[index] = tile;
-		}
+		sprites[line] = i;
+        std::cout << "i " << i << std::endl;
+
+   		uint32_t data_idx = 4;
+   		while(data_idx < raw_data.size()) {
+   		    for(int j = 0; j < 8; j++) {
+   		        ppu.tile_table[tile_index].bit0[j] = raw_data[data_idx++];
+   		    }
+   		    for(int j = 0; j < 8; j++) {
+   		        ppu.tile_table[tile_index].bit1[j] = raw_data[data_idx++];
+   		    }
+   		    tile_index++;
+   		}
 	}
+	istrm.close();
 
-	//use sprite 32 as a "player":
-	ppu.tile_table[32].bit0 = {
-		0b01111110,
-		0b11111111,
-		0b11111111,
-		0b11111111,
-		0b11111111,
-		0b11111111,
-		0b11111111,
-		0b01111110,
-	};
-	ppu.tile_table[32].bit1 = {
-		0b00000000,
-		0b00000000,
-		0b00011000,
-		0b00100100,
-		0b00000000,
-		0b00100100,
-		0b00000000,
-		0b00000000,
-	};
-
-	//makes the outside of tiles 0-16 solid:
-	ppu.palette_table[0] = {
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-	};
-
-	//makes the center of tiles 0-16 solid:
-	ppu.palette_table[1] = {
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-	};
-
-	//used for the player:
-	ppu.palette_table[7] = {
+    ppu.palette_table[0] = {
 		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
 		glm::u8vec4(0xff, 0xff, 0x00, 0xff),
 		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
 		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-	};
-
-	//used for the misc other sprites:
-	ppu.palette_table[6] = {
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0x88, 0x88, 0xff, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
 	};
 
 }
@@ -147,42 +108,72 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-
-	//slowly rotates through [0,1):
-	// (will be used to set background color)
-	background_fade += elapsed / 10.0f;
-	background_fade -= std::floor(background_fade);
-
-	constexpr float PlayerSpeed = 30.0f;
-	if (left.pressed) player_at.x -= PlayerSpeed * elapsed;
-	if (right.pressed) player_at.x += PlayerSpeed * elapsed;
-	if (down.pressed) player_at.y -= PlayerSpeed * elapsed;
-	if (up.pressed) player_at.y += PlayerSpeed * elapsed;
+	if (left.pressed) player_at.x -= 1;
+	if (right.pressed) player_at.x += 1;
+	if (down.pressed) player_at.y -= 1;
+	if (up.pressed) player_at.y += 1;
 
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
 	up.downs = 0;
 	down.downs = 0;
+
+	if (new_game) {
+		std::srand(std::time(nullptr));
+		for (uint32_t i = 0; i < PPU466::BackgroundWidth * PPU466::BackgroundHeight; i++) {
+			if ((1 + std::rand()/((RAND_MAX + 1u)/100)) < 30) {
+				bomb_map.push_back("bomb");
+			} else {
+				bomb_map.push_back("");
+            }
+		}
+		for (uint32_t i = 0; i < PPU466::BackgroundHeight; i++) {
+			for (uint32_t j = 0; j < PPU466::BackgroundWidth; j++) {
+				if (bomb_map[i*PPU466::BackgroundWidth + j] != "bomb") {
+					int bomb_num = 0;
+					if (i>0 && j>0 && bomb_map[(i-1)*PPU466::BackgroundWidth + j-1] == "bomb") {
+						bomb_num += 1;
+					}
+					if (i>0 && bomb_map[(i-1)*PPU466::BackgroundWidth + j] == "bomb") {
+						bomb_num += 1;
+					}
+					if (i>0 && j<PPU466::BackgroundWidth-1 && bomb_map[(i-1)*PPU466::BackgroundWidth + j+1] == "bomb") {
+						bomb_num += 1;
+					}
+					if (j>0 && bomb_map[i*PPU466::BackgroundWidth + j-1] == "bomb") {
+						bomb_num += 1;
+					}
+					if (j<PPU466::BackgroundWidth-1 && bomb_map[i*PPU466::BackgroundWidth + j+1] == "bomb") {
+						bomb_num += 1;
+					}
+					if (i<PPU466::BackgroundHeight-1&& j>0 && bomb_map[(i+1)*PPU466::BackgroundWidth + j-1] == "bomb") {
+						bomb_num += 1;
+					}
+					if (i<PPU466::BackgroundHeight-1&& bomb_map[(i+1)*PPU466::BackgroundWidth + j] == "bomb") {
+						bomb_num += 1;
+					}
+					if (i<PPU466::BackgroundHeight-1&& j<PPU466::BackgroundWidth-1 && bomb_map[(i+1)*PPU466::BackgroundWidth + j+1] == "bomb") {
+						bomb_num += 1;
+					}
+                   
+					bomb_map[i*PPU466::BackgroundWidth + j] = bomb_num == 0 ? "open" : std::to_string(bomb_num);
+				}
+			}
+		}
+		new_game = false;
+	}
+
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//--- set ppu state based on game state ---
 
-	//background color will be some hsv-like fade:
-	ppu.background_color = glm::u8vec4(
-		std::min(255,std::max(0,int32_t(255 * 0.5f * (0.5f + std::sin( 2.0f * M_PI * (background_fade + 0.0f / 3.0f) ) ) ))),
-		std::min(255,std::max(0,int32_t(255 * 0.5f * (0.5f + std::sin( 2.0f * M_PI * (background_fade + 1.0f / 3.0f) ) ) ))),
-		std::min(255,std::max(0,int32_t(255 * 0.5f * (0.5f + std::sin( 2.0f * M_PI * (background_fade + 2.0f / 3.0f) ) ) ))),
-		0xff
-	);
+	ppu.background_color = glm::u8vec4(63,174,0,0xff);
 
-	//tilemap gets recomputed every frame as some weird plasma thing:
-	//NOTE: don't do this in your game! actually make a map or something :-)
 	for (uint32_t y = 0; y < PPU466::BackgroundHeight; ++y) {
 		for (uint32_t x = 0; x < PPU466::BackgroundWidth; ++x) {
-			//TODO: make weird plasma thing
-			ppu.background[x+PPU466::BackgroundWidth*y] = ((x+y)%16);
+			ppu.background[x+PPU466::BackgroundWidth*y] = sprites[bomb_map[x+PPU466::BackgroundWidth*y]];
 		}
 	}
 
@@ -193,18 +184,8 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//player sprite:
 	ppu.sprites[0].x = int32_t(player_at.x);
 	ppu.sprites[0].y = int32_t(player_at.y);
-	ppu.sprites[0].index = 32;
-	ppu.sprites[0].attributes = 7;
-
-	//some other misc sprites:
-	for (uint32_t i = 1; i < 63; ++i) {
-		float amt = (i + 2.0f * background_fade) / 62.0f;
-		ppu.sprites[i].x = int32_t(0.5f * PPU466::ScreenWidth + std::cos( 2.0f * M_PI * amt * 5.0f + 0.01f * player_at.x) * 0.4f * PPU466::ScreenWidth);
-		ppu.sprites[i].y = int32_t(0.5f * PPU466::ScreenHeight + std::sin( 2.0f * M_PI * amt * 3.0f + 0.01f * player_at.y) * 0.4f * PPU466::ScreenWidth);
-		ppu.sprites[i].index = 32;
-		ppu.sprites[i].attributes = 6;
-		if (i % 2) ppu.sprites[i].attributes |= 0x80; //'behind' bit
-	}
+	ppu.sprites[0].index = sprites["close"];
+	ppu.sprites[0].attributes = 0;
 
 	//--- actually draw ---
 	ppu.draw(drawable_size);

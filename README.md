@@ -20,3 +20,8 @@ Sources: (TODO: list a source URL for any assets you did not create yourself. Ma
 
 This game was built with [NEST](NEST.md).
 
+---
+
+TODO a more complete asset pipeline
+TODO finish this game(minesweeper), there are some problem on the tile pattern. What does tile_index at PlayMode:54 mean? Why it is 22 rather 11?
+

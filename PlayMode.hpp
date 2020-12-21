@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <deque>
+#include <map>
 
 struct PlayMode : Mode {
 	PlayMode();
@@ -22,6 +23,10 @@ struct PlayMode : Mode {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
 	} left, right, down, up;
+
+	std::map<std::string, uint32_t> sprites;
+	bool new_game = true;
+	std::vector<std::string> bomb_map;
 
 	//some weird background animation:
 	float background_fade = 0.0f;
