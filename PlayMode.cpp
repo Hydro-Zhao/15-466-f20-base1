@@ -41,9 +41,17 @@ PlayMode::PlayMode() {
    		asset_file.close();
 
 		sprites[line] = i;
-        std::cout << "i " << i << std::endl;
 
-   		uint32_t data_idx = 4;
+   		uint32_t data_idx = 0;
+        // TODO, the number of palette is greater than 8. Acturally, I just use the first one
+        if (i<8) {
+            for(int j = 0; j < 4; j++) {
+                ppu.palette_table[i][j].r = raw_data[data_idx++];
+                ppu.palette_table[i][j].g = raw_data[data_idx++];
+                ppu.palette_table[i][j].b = raw_data[data_idx++];
+                ppu.palette_table[i][j].a = raw_data[data_idx++];
+            }
+        }
    		while(data_idx < raw_data.size()) {
    		    for(int j = 0; j < 8; j++) {
    		        ppu.tile_table[tile_index].bit0[j] = raw_data[data_idx++];
@@ -56,12 +64,17 @@ PlayMode::PlayMode() {
 	}
 	istrm.close();
 
-    ppu.palette_table[0] = {
-		glm::u8vec4(0x00, 0x00, 0x00, 0x00),
-		glm::u8vec4(0xff, 0xff, 0x00, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-		glm::u8vec4(0x00, 0x00, 0x00, 0xff),
-	};
+    /**
+     * TODO, not practical
+     * 0-7 => 1-8
+     * 8 unkonow
+     * 9 bomb
+     * 10 unknown
+     * 11 close
+     */ 
+    sprites["bomb"] = 9;
+    sprites["close"] = 8;
+    sprites["open"] = 11;
 
 }
 
@@ -122,7 +135,8 @@ void PlayMode::update(float elapsed) {
 	if (new_game) {
 		std::srand(std::time(nullptr));
 		for (uint32_t i = 0; i < PPU466::BackgroundWidth * PPU466::BackgroundHeight; i++) {
-			if ((1 + std::rand()/((RAND_MAX + 1u)/100)) < 30) {
+            // TODO, do not hardcoded the level
+			if ((1 + std::rand()/((RAND_MAX + 1u)/100)) < 20) {
 				bomb_map.push_back("bomb");
 			} else {
 				bomb_map.push_back("");
@@ -173,7 +187,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 	for (uint32_t y = 0; y < PPU466::BackgroundHeight; ++y) {
 		for (uint32_t x = 0; x < PPU466::BackgroundWidth; ++x) {
-			ppu.background[x+PPU466::BackgroundWidth*y] = sprites[bomb_map[x+PPU466::BackgroundWidth*y]];
+			ppu.background[x+PPU466::BackgroundWidth*y] = sprites[bomb_map[x+PPU466::BackgroundWidth*y]]; // all tiles use the same palette
 		}
 	}
 
@@ -184,7 +198,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//player sprite:
 	ppu.sprites[0].x = int32_t(player_at.x);
 	ppu.sprites[0].y = int32_t(player_at.y);
-	ppu.sprites[0].index = sprites["close"];
+	ppu.sprites[0].index = sprites["bomb"]; // use bomb to represent the current position
 	ppu.sprites[0].attributes = 0;
 
 	//--- actually draw ---
